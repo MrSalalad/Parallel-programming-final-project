@@ -18,7 +18,7 @@ int main() {
     int batch_size = 32;
     int epochs = 1;         // Test với 1 epoch
     float learning_rate = 0.001f;
-    int max_batches_to_run = 5; // CHỈ CHẠY 5 BATCH ĐỂ TEST (Bỏ dòng này nếu muốn chạy full)
+    int max_batches_to_run = 10; // CHỈ CHẠY 5 BATCH ĐỂ TEST (Bỏ dòng này nếu muốn chạy full)
 
     std::cout << "Start Training (CPU Baseline)..." << std::endl;
     auto start_time = std::chrono::high_resolution_clock::now();

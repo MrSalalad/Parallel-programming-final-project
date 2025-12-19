@@ -1,71 +1,91 @@
 #include <iostream>
 #include <vector>
-#include <chrono> // Đo thời gian
+#include <chrono> 
+#include <iomanip> 
+#include <numeric> 
+
 #include "include/cifar10_dataset.h"
 #include "include/autoencoder.h"
 #include "include/layers.h"
 
 int main() {
-    std::cout << "--- Phase 1.4: CPU Training Loop ---" << std::endl;
+    std::cout << "==========================" << std::endl;
+    std::cout << "   PHASE 1: CPU BASELINE     " << std::endl;
+    std::cout << "==========================" << std::endl;
 
-    // 1. Setup
-    CIFAR10Dataset dataset("./data");
+    std::string data_path = "./data"; 
+    CIFAR10Dataset dataset(data_path);
     dataset.load_data();
     
     Autoencoder model;
     
-    // Hyperparameters
+    // C?u h?nh ch?y th?t
     int batch_size = 32;
-    int epochs = 1;         // Test với 1 epoch
+    int target_epochs = 1;      // B?n mu?n ch?y th? 1 epoch tr�?c th? �? 1, mu?n ch?y h?t th? �? 20
     float learning_rate = 0.001f;
-    int max_batches_to_run = 10; // CHỈ CHẠY 5 BATCH ĐỂ TEST (Bỏ dòng này nếu muốn chạy full)
+    
+    // [QUAN TR?NG] �? t?t gi?i h?n test �? ch?y full
+    // int MAX_BATCHES_TO_TEST = 10; 
 
-    std::cout << "Start Training (CPU Baseline)..." << std::endl;
-    auto start_time = std::chrono::high_resolution_clock::now();
+    std::cout << "\n[CONFIG] Batch Size: " << batch_size 
+              << " | Learning Rate: " << learning_rate 
+              << " | Target Epochs: " << target_epochs << std::endl;
+    std::cout << "[INFO] Starting full training loop..." << std::endl;
 
-    for (int epoch = 0; epoch < epochs; ++epoch) {
-        dataset.shuffle_data();
-        std::vector<float> batch_data;
-        float total_loss = 0.0f;
-        int batch_count = 0;
+    std::vector<float> batch_data;
 
+    // --- EPOCH LOOP ---
+    for (int epoch = 0; epoch < target_epochs; ++epoch) {
+        
+        std::cout << "\nSTARTING EPOCH " << epoch + 1 << "/" << target_epochs << std::endl;
+        
+        dataset.shuffle_data(); // X�o tr?n d? li?u �?u m?i epoch
+        int batch_count = 0;    // Reset �?m batch cho epoch m?i
+        float epoch_loss = 0.0f;
+
+        // --- BATCH LOOP ---
         while (dataset.get_next_batch(batch_size, batch_data)) {
+            int current_batch_size = batch_data.size() / (3 * 32 * 32);
+            auto t_start = std::chrono::high_resolution_clock::now();
+
             // 1. Forward
-            model.forward(batch_data, batch_size);
+            model.forward(batch_data, current_batch_size);
 
             // 2. Compute Loss
             float loss = CPULayers::mse_loss(model.output, batch_data);
-            total_loss += loss;
+            epoch_loss += loss;
 
             // 3. Backward
-            model.backward(batch_data, batch_size);
+            model.backward(batch_data, current_batch_size);
 
             // 4. Update
             model.update(learning_rate);
 
-            // Logging
-            if (batch_count % 1 == 0) { // Log mỗi batch
-                std::cout << "Epoch " << epoch + 1 << " | Batch " << batch_count 
-                          << " | Loss: " << loss << std::endl;
-            }
-
-            batch_count++;
+            auto t_end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> t_diff = t_end - t_start;
             
-            // --- TEST LIMIT: Dừng sau 5 batch để không phải chờ ---
-            if (batch_count >= max_batches_to_run) {
-                std::cout << "Stopping early for verification (Remove limit to run full dataset)" << std::endl;
-                break;
+            batch_count++;
+
+            if (batch_count % 1 == 0) {
+                std::cout << "Epoch " << std::setw(2) << epoch + 1 
+                          << " | Batch " << std::setw(4) << batch_count 
+                          << " | Time: " << std::fixed << std::setprecision(2) << t_diff.count() << "s"
+                          << " | Loss: " << std::setprecision(5) << loss << std::endl;
             }
         }
+        
+        // T?ng k?t Epoch
+        std::cout << "------------------" << std::endl;
+        std::cout << "FINISHED EPOCH " << epoch + 1 
+                  << " | Avg Loss: " << epoch_loss / batch_count << std::endl;
+        std::cout << "------------------" << std::endl;
+
+        // Save Model sau m?i epoch 
+        std::string save_path = "./output/model_epoch_" + std::to_string(epoch + 1) + ".bin";
+        // system("mkdir -p output"); // B? d?ng n�y n?u ch?y tr�n Windows b? l?i mkdir
+        model.save_weights(save_path);
     }
 
-    auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> duration = end_time - start_time;
-    
-    std::cout << "Training finished in " << duration.count() << " seconds." << std::endl;
-
-    // Save Model
-    model.save_weights("./output/model_cpu.bin");
-
+    std::cout << "Training Complete!" << std::endl;
     return 0;
 }

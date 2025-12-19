@@ -7,6 +7,41 @@
 #include "../include/cifar10_dataset.h"
 #include "../include/autoencoder.h"     
 #include "../include/gpu_autoencoder.h" 
+#include <fstream> 
+
+// Hàm phụ trợ: Copy từ GPU về CPU rồi ghi ra file
+void save_gpu_layer(std::ofstream& file, float* d_data, int size) {
+    std::vector<float> h_data(size);
+    cudaMemcpy(h_data.data(), d_data, size * sizeof(float), cudaMemcpyDeviceToHost);
+    file.write(reinterpret_cast<char*>(h_data.data()), size * sizeof(float));
+}
+
+void save_gpu_model(GPUAutoencoder& model, const std::string& filename) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Error opening file for save: " << filename << std::endl;
+        return;
+    }
+    
+    // Thứ tự lưu phải khớp y hệt lúc đọc (w1, b1, w2, b2...)
+    save_gpu_layer(file, model.d_conv1_w, 256*3*3*3);
+    save_gpu_layer(file, model.d_conv1_b, 256);
+    
+    save_gpu_layer(file, model.d_conv2_w, 128*256*3*3);
+    save_gpu_layer(file, model.d_conv2_b, 128);
+    
+    save_gpu_layer(file, model.d_conv3_w, 128*128*3*3);
+    save_gpu_layer(file, model.d_conv3_b, 128);
+    
+    save_gpu_layer(file, model.d_conv4_w, 256*128*3*3);
+    save_gpu_layer(file, model.d_conv4_b, 256);
+    
+    save_gpu_layer(file, model.d_conv5_w, 3*256*3*3);
+    save_gpu_layer(file, model.d_conv5_b, 3);
+    
+    std::cout << "\n[SAVE] Model saved to " << filename << std::endl;
+    file.close();
+}
 
 // Hàm đo VRAM
 void print_gpu_memory_usage() {
@@ -114,6 +149,7 @@ int main() {
     
     std::cout << "==================================================" << std::endl;
 
+    save_gpu_model(gpu_model, "./output/model_gpu_phase2.bin");
     cudaFree(d_batch_data);
     std::cout << "Done." << std::endl;
     return 0;

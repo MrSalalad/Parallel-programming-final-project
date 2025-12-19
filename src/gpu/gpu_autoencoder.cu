@@ -162,6 +162,91 @@ void GPUAutoencoder::forward(float* d_batch_data) {
     CHECK(cudaDeviceSynchronize());
 }
 
+void GPUAutoencoder::forward_phase3() {
+    int block_size = 256;
+
+    // CẤU HÌNH KERNEL SHARED MEMORY
+    // Kernel này yêu cầu block cố định 16x16 để khớp với TILE_WIDTH trong code kernel
+    dim3 block_shared(16, 16); 
+        
+    // ============================
+    // LAYER 1: Conv1 (32x32)
+    // ============================
+    // Grid: (W/16, H/16, Batch * Out_Channel)
+    dim3 grid_c1((32 + 15)/16, (32 + 15)/16, batch_size * 256);
+        
+    // Gọi Shared Mem Kernel
+    Phase3Kernels::conv2d_shared_mem_kernel<<<grid_c1, block_shared, 0, stream_compute>>>(
+        d_input, d_conv1_out, d_conv1_w, d_conv1_b,
+        batch_size, 3, 256, 32, 32, 32, 32 // Input: 32x32, Output: 32x32
+    );
+        
+    // Vẫn cần ReLU và Pool (Dùng Naive kernel nhưng chạy trên stream)
+    int size_c1 = batch_size * 256 * 32 * 32;
+    NaiveKernels::relu_forward_kernel<<<get_grid_size(size_c1), block_size, 0, stream_compute>>>(d_conv1_out, size_c1);
+        
+    int size_p1 = batch_size * 256 * 16 * 16;
+    NaiveKernels::max_pool_forward_kernel<<<get_grid_size(size_p1), block_size, 0, stream_compute>>>(
+        d_conv1_out, d_pool1_out, batch_size, 256, 32, 32, 16, 16);
+
+    // ============================
+    // LAYER 2: Conv2 (16x16)
+    // ============================
+    dim3 grid_c2((16 + 15)/16, (16 + 15)/16, batch_size * 128);
+        
+    Phase3Kernels::conv2d_shared_mem_kernel<<<grid_c2, block_shared, 0, stream_compute>>>(
+        d_pool1_out, d_conv2_out, d_conv2_w, d_conv2_b,
+        batch_size, 256, 128, 16, 16, 16, 16
+    );
+
+    int size_c2 = batch_size * 128 * 16 * 16;
+    NaiveKernels::relu_forward_kernel<<<get_grid_size(size_c2), block_size, 0, stream_compute>>>(d_conv2_out, size_c2);
+        
+    int size_p2 = batch_size * 128 * 8 * 8;
+    NaiveKernels::max_pool_forward_kernel<<<get_grid_size(size_p2), block_size, 0, stream_compute>>>(
+        d_conv2_out, d_encoded, batch_size, 128, 16, 16, 8, 8);
+
+    // ============================
+    // DECODER (Conv3, Conv4, Conv5)
+    // ============================
+    // Conv3 (8x8) -> Quá nhỏ cho Tile 16x16, nên dùng Naive hoặc Fused ở đây thì tốt hơn
+    // Nhưng để demo, ta vẫn dùng Naive cho layer quá nhỏ này
+    int size_c3 = batch_size * 128 * 8 * 8;
+    NaiveKernels::conv2d_forward_kernel<<<get_grid_size(size_c3), block_size, 0, stream_compute>>>(
+        d_encoded, d_conv3_out, d_conv3_w, d_conv3_b,
+        batch_size, 128, 128, 8, 8, 8, 8, 3, 1, 1);
+    NaiveKernels::relu_forward_kernel<<<get_grid_size(size_c3), block_size, 0, stream_compute>>>(d_conv3_out, size_c3);
+    
+    // Upsample 1
+    int size_up1 = batch_size * 128 * 16 * 16;
+    NaiveKernels::upsample_forward_kernel<<<get_grid_size(size_up1), block_size, 0, stream_compute>>>(
+        d_conv3_out, d_up1_out, batch_size, 128, 8, 8, 16, 16);
+
+    // Conv4 (16x16) -> Dùng Shared Mem được
+    dim3 grid_c4((16 + 15)/16, (16 + 15)/16, batch_size * 256);
+    Phase3Kernels::conv2d_shared_mem_kernel<<<grid_c4, block_shared, 0, stream_compute>>>(
+        d_up1_out, d_conv4_out, d_conv4_w, d_conv4_b,
+        batch_size, 128, 256, 16, 16, 16, 16
+    );
+    int size_c4 = batch_size * 256 * 16 * 16;
+    NaiveKernels::relu_forward_kernel<<<get_grid_size(size_c4), block_size, 0, stream_compute>>>(d_conv4_out, size_c4);
+        
+    // Upsample 2
+    int size_up2 = batch_size * 256 * 32 * 32;
+    NaiveKernels::upsample_forward_kernel<<<get_grid_size(size_up2), block_size, 0, stream_compute>>>(
+        d_conv4_out, d_up2_out, batch_size, 256, 16, 16, 32, 32);
+
+    // Conv5 (Output 32x32) -> Dùng Shared Mem được
+    dim3 grid_c5((32 + 15)/16, (32 + 15)/16, batch_size * 3);
+    Phase3Kernels::conv2d_shared_mem_kernel<<<grid_c5, block_shared, 0, stream_compute>>>(
+        d_up2_out, d_output, d_conv5_w, d_conv5_b,
+        batch_size, 256, 3, 32, 32, 32, 32
+    );
+
+    
+    CHECK(cudaStreamSynchronize(stream_compute));
+}
+
 // =============================================================================
 // 2. COMPUTE LOSS
 // =============================================================================
@@ -296,6 +381,188 @@ void GPUAutoencoder::backward(float* d_target) {
     CHECK(cudaFree(d_grad_buffer));
     CHECK(cudaFree(d_grad_next));
     CHECK(cudaDeviceSynchronize());
+}
+
+void GPUAutoencoder::backward_phase3(float* d_target) {
+    // Config chung
+    int size_32x32 = batch_size * 3 * 32 * 32;
+    int block = 256;
+    dim3 block_shared(16, 16); // Block cho kernel tối ưu
+
+    float *d_grad_buffer; 
+    CHECK(cudaMalloc(&d_grad_buffer, batch_size * 256 * 32 * 32 * sizeof(float)));
+
+    // 1. MSE Backward (Loss Gradient)
+    NaiveKernels::mse_backward_kernel<<<get_grid_size(size_32x32), block, 0, stream_compute>>>(
+        d_output, d_target, d_grad_buffer, size_32x32);
+
+    // =========================================================
+    // LAYER 5 BACKWARD (Output -> Up2)
+    // =========================================================
+    CHECK(cudaMemsetAsync(d_conv5_dw, 0, 3 * 256 * 9 * sizeof(float), stream_compute));
+    CHECK(cudaMemsetAsync(d_conv5_db, 0, 3 * sizeof(float), stream_compute));
+
+    // Weight Gradient (Vẫn dùng Naive vì tối ưu cái này phức tạp - Reduction)
+    int n_w5 = 3 * 256 * 9;
+    NaiveKernels::conv2d_backward_weight_kernel<<<get_grid_size(n_w5), block, 0, stream_compute>>>(
+        d_up2_out, d_grad_buffer, d_conv5_dw, d_conv5_db,
+        batch_size, 256, 3, 32, 32, 32, 32, 3, 1, 1);
+
+    float *d_grad_next;
+    CHECK(cudaMalloc(&d_grad_next, batch_size * 256 * 32 * 32 * sizeof(float)));
+    
+    // --- OPTIMIZATION START: Input Gradient (Layer 5) ---
+    // Naive cũ: 
+    // NaiveKernels::conv2d_backward_input_kernel<<<...>>>(...);
+    
+    // Phase 3 Mới: Dùng Shared Memory
+    // Grid tính theo Input Size (32x32) và Channel Input (256)
+    dim3 grid_b5((32 + 15)/16, (32 + 15)/16, batch_size * 256);
+    Phase3Kernels::conv2d_backward_input_shared_mem_kernel<<<grid_b5, block_shared, 0, stream_compute>>>(
+        d_grad_buffer, d_conv5_w, d_grad_next,
+        batch_size, 256, 3, 32, 32, 32, 32 // Chú ý: 256 là in_c (output của backward), 3 là out_c (input của backward)
+    );
+    // --- OPTIMIZATION END ---
+
+    // =========================================================
+    // LAYER 4 BACKWARD (Up2 -> Conv4 -> Up1)
+    // =========================================================
+    // 1. Upsample Backward (Up2)
+    int size_up2 = batch_size * 256 * 32 * 32;
+    int size_conv4 = batch_size * 256 * 16 * 16;
+    // Buffer Up2 -> Conv4 Out (d_grad_buffer đang là size lớn, dùng lại được)
+    // Nhưng Upsample Backward reduce size, nên kết quả ghi vào buffer nhỏ hơn
+    // Ta dùng d_grad_buffer làm source (grad_next ở trên), ghi vào d_grad_next (làm temp)
+    // Để tránh rối buffer, ta free/alloc lại hoặc dùng pointer swap. 
+    // Để an toàn và dễ hiểu, ta làm từng bước:
+    
+    float *d_grad_conv4; // Gradient tại output của Conv4
+    CHECK(cudaMalloc(&d_grad_conv4, size_conv4 * sizeof(float)));
+
+    NaiveKernels::upsample_backward_kernel<<<get_grid_size(size_conv4), block, 0, stream_compute>>>(
+        d_grad_next, d_grad_conv4, batch_size, 256, 16, 16, 32, 32);
+
+    // 2. ReLU Backward
+    NaiveKernels::relu_backward_kernel<<<get_grid_size(size_conv4), block, 0, stream_compute>>>(
+        d_conv4_out, d_grad_conv4, d_grad_conv4, size_conv4);
+
+    // 3. Conv4 Gradients
+    CHECK(cudaMemsetAsync(d_conv4_dw, 0, 256 * 128 * 9 * sizeof(float), stream_compute));
+    CHECK(cudaMemsetAsync(d_conv4_db, 0, 256 * sizeof(float), stream_compute));
+    int n_w4 = 256 * 128 * 9;
+    NaiveKernels::conv2d_backward_weight_kernel<<<get_grid_size(n_w4), block, 0, stream_compute>>>(
+        d_up1_out, d_grad_conv4, d_conv4_dw, d_conv4_db,
+        batch_size, 128, 256, 16, 16, 16, 16, 3, 1, 1);
+
+    float *d_grad_up1;
+    CHECK(cudaMalloc(&d_grad_up1, batch_size * 128 * 16 * 16 * sizeof(float)));
+
+    // --- OPTIMIZATION: Input Gradient (Layer 4) ---
+    // Grid: 16x16, Channel 128
+    dim3 grid_b4((16 + 15)/16, (16 + 15)/16, batch_size * 128);
+    Phase3Kernels::conv2d_backward_input_shared_mem_kernel<<<grid_b4, block_shared, 0, stream_compute>>>(
+        d_grad_conv4, d_conv4_w, d_grad_up1,
+        batch_size, 128, 256, 16, 16, 16, 16 
+    );
+
+    // =========================================================
+    // LAYER 3 (Up1 -> Conv3 -> Encoded)
+    // =========================================================
+    int size_conv3 = batch_size * 128 * 8 * 8;
+    float *d_grad_conv3;
+    CHECK(cudaMalloc(&d_grad_conv3, size_conv3 * sizeof(float)));
+
+    NaiveKernels::upsample_backward_kernel<<<get_grid_size(size_conv3), block, 0, stream_compute>>>(
+        d_grad_up1, d_grad_conv3, batch_size, 128, 8, 8, 16, 16);
+    
+    NaiveKernels::relu_backward_kernel<<<get_grid_size(size_conv3), block, 0, stream_compute>>>(
+        d_conv3_out, d_grad_conv3, d_grad_conv3, size_conv3);
+
+    CHECK(cudaMemsetAsync(d_conv3_dw, 0, 128 * 128 * 9 * sizeof(float), stream_compute));
+    CHECK(cudaMemsetAsync(d_conv3_db, 0, 128 * sizeof(float), stream_compute));
+    int n_w3 = 128 * 128 * 9;
+    NaiveKernels::conv2d_backward_weight_kernel<<<get_grid_size(n_w3), block, 0, stream_compute>>>(
+        d_encoded, d_grad_conv3, d_conv3_dw, d_conv3_db,
+        batch_size, 128, 128, 8, 8, 8, 8, 3, 1, 1);
+
+    float *d_grad_encoded;
+    CHECK(cudaMalloc(&d_grad_encoded, size_conv3 * sizeof(float))); // 8x8x128
+
+    // Layer 3 nhỏ (8x8), dùng Naive Kernel có thể nhanh hơn Shared Mem do overhead
+    NaiveKernels::conv2d_backward_input_kernel<<<get_grid_size(size_conv3), block, 0, stream_compute>>>(
+        d_grad_conv3, d_conv3_w, d_grad_encoded,
+        batch_size, 128, 128, 8, 8, 8, 8, 3, 1, 1);
+
+    // =========================================================
+    // LAYER 2 (Encoded -> Pool2 -> Conv2 -> Pool1)
+    // =========================================================
+    int size_conv2 = batch_size * 128 * 16 * 16;
+    float *d_grad_conv2;
+    CHECK(cudaMalloc(&d_grad_conv2, size_conv2 * sizeof(float)));
+    CHECK(cudaMemsetAsync(d_grad_conv2, 0, size_conv2 * sizeof(float), stream_compute)); // MaxPool backward cần init 0
+
+    NaiveKernels::max_pool_backward_kernel<<<get_grid_size(size_conv3), block, 0, stream_compute>>>(
+        d_conv2_out, d_grad_encoded, d_grad_conv2,
+        batch_size, 128, 16, 16, 8, 8); // Pool: Output 8x8 -> Input 16x16
+
+    NaiveKernels::relu_backward_kernel<<<get_grid_size(size_conv2), block, 0, stream_compute>>>(
+        d_conv2_out, d_grad_conv2, d_grad_conv2, size_conv2);
+
+    CHECK(cudaMemsetAsync(d_conv2_dw, 0, 128 * 256 * 9 * sizeof(float), stream_compute));
+    CHECK(cudaMemsetAsync(d_conv2_db, 0, 128 * sizeof(float), stream_compute));
+    int n_w2 = 128 * 256 * 9;
+    NaiveKernels::conv2d_backward_weight_kernel<<<get_grid_size(n_w2), block, 0, stream_compute>>>(
+        d_pool1_out, d_grad_conv2, d_conv2_dw, d_conv2_db,
+        batch_size, 256, 128, 16, 16, 16, 16, 3, 1, 1);
+
+    float *d_grad_pool1;
+    CHECK(cudaMalloc(&d_grad_pool1, batch_size * 256 * 16 * 16 * sizeof(float)));
+
+    // --- OPTIMIZATION: Input Gradient (Layer 2) ---
+    // Grid 16x16, Channel 256
+    dim3 grid_b2((16 + 15)/16, (16 + 15)/16, batch_size * 256);
+    Phase3Kernels::conv2d_backward_input_shared_mem_kernel<<<grid_b2, block_shared, 0, stream_compute>>>(
+        d_grad_conv2, d_conv2_w, d_grad_pool1,
+        batch_size, 256, 128, 16, 16, 16, 16
+    );
+
+    // =========================================================
+    // LAYER 1 (Pool1 -> Conv1 -> Input)
+    // =========================================================
+    int size_conv1 = batch_size * 256 * 32 * 32;
+    float *d_grad_conv1;
+    CHECK(cudaMalloc(&d_grad_conv1, size_conv1 * sizeof(float)));
+    CHECK(cudaMemsetAsync(d_grad_conv1, 0, size_conv1 * sizeof(float), stream_compute));
+
+    NaiveKernels::max_pool_backward_kernel<<<get_grid_size(batch_size * 256 * 16 * 16), block, 0, stream_compute>>>(
+        d_conv1_out, d_grad_pool1, d_grad_conv1,
+        batch_size, 256, 32, 32, 16, 16);
+    
+    NaiveKernels::relu_backward_kernel<<<get_grid_size(size_conv1), block, 0, stream_compute>>>(
+        d_conv1_out, d_grad_conv1, d_grad_conv1, size_conv1);
+
+    CHECK(cudaMemsetAsync(d_conv1_dw, 0, 256 * 3 * 9 * sizeof(float), stream_compute));
+    CHECK(cudaMemsetAsync(d_conv1_db, 0, 256 * sizeof(float), stream_compute));
+    int n_w1 = 256 * 3 * 9;
+    NaiveKernels::conv2d_backward_weight_kernel<<<get_grid_size(n_w1), block, 0, stream_compute>>>(
+        d_input, d_grad_conv1, d_conv1_dw, d_conv1_db,
+        batch_size, 3, 256, 32, 32, 32, 32, 3, 1, 1);
+
+    // Backward Input cho Layer 1 (không cần thiết nếu không cần Gradient Input, nhưng để đủ bộ):
+    // Phase3Kernels::conv2d_backward_input_shared_mem_kernel<<<...>>>(...);
+
+    // Clean up
+    CHECK(cudaFree(d_grad_buffer));
+    CHECK(cudaFree(d_grad_next));
+    CHECK(cudaFree(d_grad_conv4));
+    CHECK(cudaFree(d_grad_up1));
+    CHECK(cudaFree(d_grad_conv3));
+    CHECK(cudaFree(d_grad_encoded));
+    CHECK(cudaFree(d_grad_conv2));
+    CHECK(cudaFree(d_grad_pool1));
+    CHECK(cudaFree(d_grad_conv1));
+
+    CHECK(cudaStreamSynchronize(stream_compute));
 }
 
 // =============================================================================

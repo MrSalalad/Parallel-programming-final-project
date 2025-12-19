@@ -7,6 +7,8 @@
 class GPUAutoencoder {
 public:
     int batch_size;
+    int version; // 1: Shared Mem Only, 2: Full Optimization (Pinned+Streams)
+    cudaStream_t stream_compute;
 
     // --- 1. WEIGHTS & BIAS POINTERS (DEVICE) ---
     // Encoder
@@ -52,7 +54,7 @@ public:
         const std::vector<float>& h_conv5_w, const std::vector<float>& h_conv5_b
     );
 
-    // --- CÁC HÀM XỬ LÝ CHÍNH (QUAN TRỌNG - ĐÃ BỔ SUNG) ---
+    // --- CÁC HÀM XỬ LÝ CHÍNH (QUAN TRỌNG) ---
     
     // 1. Forward Pass: Tính toán từ Input -> Output
     void forward(float* d_batch_data);
@@ -65,6 +67,12 @@ public:
 
     // 4. Update Weights: W = W - lr * Grad
     void update(float learning_rate);
+
+    // Phase 3: Forward Pass with optimization option
+    void forward_phase3();
+
+    // Phase 3: Backward Pass with optimization option
+    void backward_phase3(float* d_target);
 };
 
 #endif // GPU_AUTOENCODER_H

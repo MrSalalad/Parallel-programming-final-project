@@ -56,4 +56,22 @@ namespace NaiveKernels {
     __global__ void sgd_update_kernel(float* weights, const float* grads, float lr, int size);
 }
 
+// Namespace cho Phase 3 Kernels (Phase 3)
+namespace Phase3Kernels {
+    // 1. Shared Memory Convolution
+    __global__ void conv2d_shared_mem_kernel(const float* input, float* output, const float* weights, const float* bias,
+                                             int batch_size, int in_c, int out_c, int in_h, int in_w, 
+                                             int out_h, int out_w);
+
+    // 2. Fused Convolution + ReLU
+    __global__ void conv2d_relu_fused_kernel(const float* input, float* output, const float* weights, const float* bias,
+                                             int batch_size, int in_c, int out_c, int in_h, int in_w, 
+                                             int out_h, int out_w, int k_size, int padding, int stride);
+    
+    // Backward Input dùng Shared Memory (Tương tự Forward nhưng xoay Weight)
+    __global__ void conv2d_backward_input_shared_mem_kernel(const float* grad_output, const float* weights, float* grad_input,
+                                                            int batch_size, int in_c, int out_c, int in_h, int in_w, 
+                                                            int out_h, int out_w);
+}
+
 #endif

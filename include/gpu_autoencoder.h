@@ -7,7 +7,6 @@
 class GPUAutoencoder {
 public:
     int batch_size;
-    int version; // 1: Shared Mem Only, 2: Full Optimization (Pinned+Streams)
     cudaStream_t stream_compute;
 
     // --- 1. WEIGHTS & BIAS POINTERS (DEVICE) ---
@@ -69,10 +68,10 @@ public:
     void update(float learning_rate);
 
     // Phase 3: Forward Pass with optimization option
-    void forward_phase3();
+    void forward_phase3_ver1();
 
     // Phase 3: Backward Pass with optimization option
-    void backward_phase3(float* d_target);
+    void backward_phase3_ver1(float* d_target);
 };
 
 #endif // GPU_AUTOENCODER_H

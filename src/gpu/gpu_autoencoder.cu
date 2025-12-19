@@ -162,7 +162,7 @@ void GPUAutoencoder::forward(float* d_batch_data) {
     CHECK(cudaDeviceSynchronize());
 }
 
-void GPUAutoencoder::forward_phase3() {
+void GPUAutoencoder::forward_phase3_ver1() {
     int block_size = 256;
 
     // CẤU HÌNH KERNEL SHARED MEMORY
@@ -383,7 +383,7 @@ void GPUAutoencoder::backward(float* d_target) {
     CHECK(cudaDeviceSynchronize());
 }
 
-void GPUAutoencoder::backward_phase3(float* d_target) {
+void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
     // Config chung
     int size_32x32 = batch_size * 3 * 32 * 32;
     int block = 256;

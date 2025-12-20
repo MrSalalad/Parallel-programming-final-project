@@ -18,16 +18,13 @@ public:
 
     CIFAR10Dataset(const std::string& data_dir);
     void load_data();
-
-    // --- MỚI: Các hàm hỗ trợ Training ---
     
     // 1. Xáo trộn thứ tự index
     void shuffle_data();
 
     // 2. Lấy batch tiếp theo
     // Trả về true nếu lấy thành công, false nếu hết dữ liệu (hết epoch)
-    bool get_next_batch(int batch_size, 
-                        std::vector<float>& batch_data); // Autoencoder chỉ cần ảnh, không cần label để train
+    bool get_next_batch(int batch_size, std::vector<float>& batch_data); // Autoencoder chỉ cần ảnh, không cần label để train
 
     // 3. Reset iterator về đầu (dùng sau mỗi epoch)
     void reset_iterator();
@@ -38,7 +35,7 @@ public:
 private:
     std::string data_dir;
     
-    // --- MỚI: Quản lý shuffle và batch ---
+    // Quản lý shuffle và batch
     std::vector<int> indices; // Mảng lưu chỉ số [0, 1, ..., 49999]
     size_t current_batch_index; // Con trỏ hiện tại đang đọc đến đâu
 

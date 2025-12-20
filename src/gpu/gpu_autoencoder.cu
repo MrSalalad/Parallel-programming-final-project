@@ -39,7 +39,7 @@ GPUAutoencoder::GPUAutoencoder(int b_size) : batch_size(b_size) {
     // Layer 5: 256 -> 3
     allocate_layer(&d_conv5_w, &d_conv5_b, &d_conv5_dw, &d_conv5_db, 3*256*3*3, 3);
 
-    // --- 2. ALLOCATE ACTIVATIONS ---
+    // 2. ALLOCATE ACTIVATIONS
     int size_input = batch_size * 3 * 32 * 32;
     int size_32x32_256 = batch_size * 256 * 32 * 32;
     int size_16x16_256 = batch_size * 256 * 16 * 16;

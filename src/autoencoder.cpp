@@ -4,7 +4,7 @@
 #include <random>
 #include <fstream>
 
-// Helper init (Giữ nguyên)
+// Helper init
 void init_param_vec(std::vector<float>& vec, int size, float scale = 0.05f) {
     vec.resize(size);
     std::default_random_engine generator;
@@ -43,7 +43,6 @@ void Autoencoder::init_weights() {
 }
 
 void Autoencoder::forward(const std::vector<float>& input, int batch_size) {
-    // (Giữ nguyên code forward cũ của bạn)
     // Encoder
     conv1_out.resize(batch_size * 256 * 32 * 32);
     CPULayers::conv2d(input, conv1_out, w1, b1, batch_size, 3, 256, 32, 32);
@@ -78,7 +77,7 @@ void Autoencoder::forward(const std::vector<float>& input, int batch_size) {
     CPULayers::conv2d(up2_out, output, w5, b5, batch_size, 256, 3, 32, 32);
 }
 
-// --- MỚI: BACKWARD PASS ---
+// BACKWARD PASS
 void Autoencoder::backward(const std::vector<float>& input_batch, int batch_size) {
     // Các biến tạm để lưu gradient giữa các layer
     std::vector<float> d_output, d_up2, d_conv4_relu, d_conv4, d_up1, d_conv3_relu, d_conv3;
@@ -119,7 +118,7 @@ void Autoencoder::backward(const std::vector<float>& input_batch, int batch_size
     CPULayers::conv2d_backward(input_batch, d_conv1, w1, d_input, dw1, db1, batch_size, 3, 256, 32, 32);
 }
 
-// --- MỚI: UPDATE WEIGHTS ---
+// UPDATE WEIGHTS
 void Autoencoder::update(float lr) {
     // Helper lambda để update 1 vector
     auto update_vec = [&](std::vector<float>& w, const std::vector<float>& dw) {
@@ -157,5 +156,5 @@ void Autoencoder::save_weights(const std::string& filepath) {
 }
 
 void Autoencoder::load_weights(const std::string& filepath) {
-    // (Optional: Implement nếu cần dùng cho SVM sau này)
+    // SVM 
 }

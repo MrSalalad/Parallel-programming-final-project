@@ -9,7 +9,7 @@ public:
     int batch_size;
     cudaStream_t stream_compute;
 
-    // --- 1. WEIGHTS & BIAS POINTERS (DEVICE) ---
+    // 1. WEIGHTS & BIAS POINTERS (DEVICE)
     // Encoder
     float *d_conv1_w, *d_conv1_b; 
     float *d_conv2_w, *d_conv2_b; 
@@ -18,7 +18,7 @@ public:
     float *d_conv4_w, *d_conv4_b; 
     float *d_conv5_w, *d_conv5_b; 
 
-    // --- 2. GRADIENTS POINTERS (MỚI - BẮT BUỘC CÓ) ---
+    // 2. GRADIENTS POINTERS
     // Để lưu dW, db tính được từ Backward pass
     float *d_conv1_dw, *d_conv1_db;
     float *d_conv2_dw, *d_conv2_db;
@@ -26,7 +26,7 @@ public:
     float *d_conv4_dw, *d_conv4_db;
     float *d_conv5_dw, *d_conv5_db;
 
-    // --- 3. ACTIVATION BUFFERS (DEVICE) ---
+    // 3. ACTIVATION BUFFERS (DEVICE)
     float *d_input;       // 32x32x3
     
     float *d_conv1_out;   // 32x32x256
@@ -40,7 +40,6 @@ public:
     float *d_up2_out;     // 32x32x256
     float *d_output;      // 32x32x3
 
-    // --- METHODS ---
     GPUAutoencoder(int batch_size);
     ~GPUAutoencoder();
 
@@ -52,8 +51,6 @@ public:
         const std::vector<float>& h_conv4_w, const std::vector<float>& h_conv4_b,
         const std::vector<float>& h_conv5_w, const std::vector<float>& h_conv5_b
     );
-
-    // --- CÁC HÀM XỬ LÝ CHÍNH (QUAN TRỌNG) ---
     
     // 1. Forward Pass: Tính toán từ Input -> Output
     void forward(float* d_batch_data);
@@ -74,4 +71,4 @@ public:
     void backward_phase3_ver1(float* d_target);
 };
 
-#endif // GPU_AUTOENCODER_H
+#endif

@@ -8,13 +8,13 @@ namespace NaiveKernels {
     // =================================================================================
 
     // 1. CONV2D FORWARD
-    // SỬA: Tính index dựa trên kích thước OUTPUT (quan trọng)
+    // Tính index dựa trên kích thước OUTPUT
     __global__ void conv2d_forward_kernel(const float* input, float* output, const float* weights, const float* bias,
                                           int batch_size, int in_c, int out_c, int in_h, int in_w, 
                                           int out_h, int out_w, int k_size, int padding, int stride) {
         
         int idx = blockIdx.x * blockDim.x + threadIdx.x;
-        int total_elements = batch_size * out_c * out_h * out_w; // Sửa: Dùng kích thước Output
+        int total_elements = batch_size * out_c * out_h * out_w; // Dùng kích thước Output
 
         if (idx >= total_elements) return;
 
@@ -118,7 +118,7 @@ namespace NaiveKernels {
     // PHẦN 2: BACKWARD KERNELS
     // =================================================================================
 
-    // 6. CONV2D BACKWARD INPUT (MỚI: Tách ra để khớp với header)
+    // 6. CONV2D BACKWARD INPUT
     __global__ void conv2d_backward_input_kernel(const float* grad_output, const float* weights, float* grad_input,
                                                  int batch_size, int in_c, int out_c, int in_h, int in_w, 
                                                  int out_h, int out_w, int k_size, int padding, int stride) {
@@ -286,7 +286,7 @@ namespace NaiveKernels {
         }
     }
 
-    // 12. SGD UPDATE (Thêm vào cho đủ bộ)
+    // 12. SGD UPDATE
     __global__ void sgd_update_kernel(float* weights, const float* grads, float lr, int size) {
         int idx = blockIdx.x * blockDim.x + threadIdx.x;
         if (idx < size) {

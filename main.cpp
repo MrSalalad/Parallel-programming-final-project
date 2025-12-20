@@ -21,7 +21,7 @@ int main() {
     
     // Cấu hình
     int batch_size = 32;
-    int target_epochs = 1; // Để là 1 để chạy lấy số liệu báo cáo, sau đó thích thì sửa thành 20
+    int target_epochs = 1;
     float learning_rate = 0.001f;
     
     std::cout << "\n[CONFIG] Batch Size: " << batch_size 
@@ -30,7 +30,7 @@ int main() {
 
     std::vector<float> batch_data;
 
-    // --- EPOCH LOOP ---
+    // EPOCH LOOP
     for (int epoch = 0; epoch < target_epochs; ++epoch) {
         
         std::cout << "\n>>> STARTING EPOCH " << epoch + 1 << "/" << target_epochs << " <<<" << std::endl;

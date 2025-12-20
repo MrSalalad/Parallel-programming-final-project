@@ -5,7 +5,7 @@
 #include <cmath>
 
 namespace CPULayers {
-    // --- FORWARD (Đã có) ---
+    // FORWARD
     void conv2d(const std::vector<float>& input, std::vector<float>& output,
                 const std::vector<float>& weights, const std::vector<float>& bias,
                 int batch_size, int in_channels, int out_channels, 
@@ -21,7 +21,7 @@ namespace CPULayers {
 
     float mse_loss(const std::vector<float>& output, const std::vector<float>& target);
 
-    // --- BACKWARD (MỚI - Cần cho Phase 1.3 & 1.4) ---
+    // BACKWARD (Phase 1.3 & 1.4)
     
     // 1. MSE Loss Backward: Tính đạo hàm của Loss theo Output dự đoán
     // d_loss/d_output = 2 * (output - target) / N
@@ -45,9 +45,8 @@ namespace CPULayers {
                          int in_height, int in_width);
 
     // 4. MaxPool Backward: Truyền gradient về đúng vị trí max lúc forward
-    // Lưu ý: Cần chạy lại logic tìm max để biết index (hoặc lưu mask từ forward - nhưng ở đây ta tính lại cho đơn giản bộ nhớ)
     void max_pool_backward(const std::vector<float>& input, 
-                           const std::vector<float>& grad_output, 
+                           const std::vector<float>& grad_output,   
                            std::vector<float>& grad_input,
                            int batch_size, int channels, int in_height, int in_width);
 

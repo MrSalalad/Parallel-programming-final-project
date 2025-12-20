@@ -29,7 +29,7 @@ namespace CPULayers {
         // Reset output về 0
         std::fill(output.begin(), output.end(), 0.0f);
 
-        // Nested loops (Rất chậm trên CPU -> Đây là cơ sở để so sánh với GPU)
+        // Nested loops
         for (int b = 0; b < batch_size; ++b) {
             for (int oc = 0; oc < out_channels; ++oc) {
                 for (int h = 0; h < out_height; ++h) {

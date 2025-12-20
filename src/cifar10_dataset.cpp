@@ -1,18 +1,16 @@
 #include "cifar10_dataset.h"
 #include <fstream>
 #include <iostream>
-#include <algorithm> // cho std::shuffle
-#include <random>    // cho std::default_random_engine, std::chrono
+#include <algorithm> 
+#include <random>    
 #include <chrono>
-#include <numeric>   // cho std::iota
+#include <numeric>   
 
 CIFAR10Dataset::CIFAR10Dataset(const std::string& dir) 
     : data_dir(dir), current_batch_index(0) {}
 
 void CIFAR10Dataset::load_data() {
-    // ... (Giữ nguyên phần load code cũ của bạn ở đây) ...
-    // ... Phần reserve và loop đọc file ...
-    // Code cũ:
+    // Phần reserve và loop đọc file
     std::cout << "Loading training data..." << std::endl;
     size_t total_train_floats = 50000 * (size_t)IMG_SIZE; 
     train_images.reserve(total_train_floats);
@@ -23,13 +21,13 @@ void CIFAR10Dataset::load_data() {
         read_batch(path, train_images, train_labels);
     }
     
-    // --- MỚI: Khởi tạo indices cho việc shuffle ---
+    // Khởi tạo indices cho việc shuffle
     indices.resize(train_labels.size());
     // Điền giá trị từ 0 đến 49999 vào indices
     std::iota(indices.begin(), indices.end(), 0);
     std::cout << "Initialized " << indices.size() << " indices for shuffling." << std::endl;
 
-    // Load test set (giữ nguyên code cũ)
+    // Load test set
     size_t total_test_floats = 10000 * (size_t)IMG_SIZE;
     test_images.reserve(total_test_floats);
     test_labels.reserve(10000);
@@ -37,11 +35,9 @@ void CIFAR10Dataset::load_data() {
     read_batch(test_path, test_images, test_labels);
 }
 
-// ... (Giữ nguyên hàm read_batch cũ) ...
 void CIFAR10Dataset::read_batch(const std::string& filename, 
                                 std::vector<float>& images, 
                                 std::vector<unsigned char>& labels) {
-    // Paste lại code read_batch cũ của bạn vào đây
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "Error: Cannot open file " << filename << std::endl;
@@ -59,8 +55,6 @@ void CIFAR10Dataset::read_batch(const std::string& filename,
     }
     file.close();
 }
-
-// --- CÀI ĐẶT CÁC HÀM MỚI ---
 
 void CIFAR10Dataset::shuffle_data() {
     // Dùng seed theo thời gian thực để mỗi lần chạy shuffle khác nhau

@@ -5,7 +5,7 @@
 
 namespace NaiveKernels {
 
-    // --- 1. CONVOLUTION ---
+    //1. CONVOLUTION
     
     // Forward: Tính Output
     __global__ void conv2d_forward_kernel(const float* input, float* output, const float* weights, const float* bias,
@@ -23,27 +23,27 @@ namespace NaiveKernels {
                                                   int batch_size, int in_c, int out_c, int in_h, int in_w, 
                                                   int out_h, int out_w, int k_size, int padding, int stride);
 
-    // --- 2. RELU ---
+    // 2. RELU
     __global__ void relu_forward_kernel(float* data, int size);
     
     __global__ void relu_backward_kernel(const float* input, const float* grad_output, 
                                          float* grad_input, int size);
 
-    // --- 3. MAX POOLING ---
+    // 3. MAX POOLING
     __global__ void max_pool_forward_kernel(const float* input, float* output,
                                             int batch_size, int c, int in_h, int in_w, int out_h, int out_w);
 
     __global__ void max_pool_backward_kernel(const float* input, const float* grad_output, float* grad_input,
                                              int batch_size, int c, int in_h, int in_w, int out_h, int out_w);
 
-    // --- 4. UPSAMPLING ---
+    // 4. UPSAMPLING
     __global__ void upsample_forward_kernel(const float* input, float* output,
                                             int batch_size, int c, int in_h, int in_w, int out_h, int out_w);
 
     __global__ void upsample_backward_kernel(const float* grad_output, float* grad_input,
                                              int batch_size, int c, int in_h, int in_w, int out_h, int out_w);
 
-    // --- 5. LOSS & UPDATE ---
+    // 5. LOSS & UPDATE
     
     // MSE Forward: Tính bình phương lỗi từng phần tử (cần gọi thêm reduce ở ngoài hoặc atomic bên trong)
     // Ở Phase Naive, ta dùng atomicAdd cho đơn giản

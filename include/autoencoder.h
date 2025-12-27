@@ -45,7 +45,6 @@ public:
     // 3. Cập nhật trọng số: W = W - learning_rate * dW
     void update(float learning_rate);
 
-    // Save/Load
     void save_weights(const std::string& filepath);
     void load_weights(const std::string& filepath);
 };

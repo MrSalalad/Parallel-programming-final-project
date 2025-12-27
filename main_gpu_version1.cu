@@ -91,13 +91,13 @@ int main() {
         cpu_helper.w3, cpu_helper.b3, cpu_helper.w4, cpu_helper.b4, cpu_helper.w5, cpu_helper.b5
     );
 
-    // --- PHASE 3 CHANGE: PINNED MEMORY ---
+    // PHASE 3 CHANGE: PINNED MEMORY
     // Thay vì dùng std::vector hay malloc thường, dùng cudaMallocHost
     // Bộ nhớ này nằm trên RAM nhưng được "ghim" để GPU truy cập trực tiếp (DMA)
     float *h_pinned_input;
     cudaMallocHost((void**)&h_pinned_input, input_size_bytes);
     
-    // Buffer tạm để nhận dữ liệu từ Dataset class (vì dataset trả về vector)
+    // Buffer tạm để nhận dữ liệu từ Dataset class
     std::vector<float> h_batch_buffer; 
 
     std::cout << "[INFO] Training Started (Optimized)..." << std::endl;
@@ -105,7 +105,7 @@ int main() {
     // Biến đo tổng thời gian
     double total_gpu_time = 0.0;
 
-    // --- VÒNG LẶP TRAIN ---
+    // VÒNG LẶP TRAIN
     for (int epoch = 0; epoch < target_epochs; ++epoch) {
         auto epoch_start = std::chrono::high_resolution_clock::now();
 
@@ -122,7 +122,6 @@ int main() {
 
             // 2. Async Copy từ Host (Pinned) -> Device
             // Sử dụng stream_copy (hoặc stream_compute nếu bạn dùng chung)
-            // Lưu ý: d_input nằm trong gpu_model
             cudaMemcpyAsync(gpu_model.d_input, h_pinned_input, input_size_bytes, cudaMemcpyHostToDevice, gpu_model.stream_compute);
             
             // 3. GPU xử lý (Optimized Kernels)
@@ -154,7 +153,7 @@ int main() {
                   << " | Avg Loss: " << std::setprecision(5) << epoch_loss / batch_count << std::endl;
     }
 
-    // --- BÁO CÁO KẾT QUẢ ---
+    // BÁO CÁO KẾT QUẢ
     double avg_time = total_gpu_time / target_epochs;
 
     std::cout << "\n==================================================" << std::endl;

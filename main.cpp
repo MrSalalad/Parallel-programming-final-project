@@ -94,7 +94,6 @@ int main() {
 
         // Save Model
         std::string save_path = "./output/model_epoch_" + std::to_string(epoch + 1) + ".bin";
-        // system("mkdir -p output"); 
         model.save_weights(save_path);
     }
 

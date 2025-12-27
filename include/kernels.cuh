@@ -45,8 +45,8 @@ namespace NaiveKernels {
 
     // 5. LOSS & UPDATE
     
-    // MSE Forward: Tính bình phương lỗi từng phần tử (cần gọi thêm reduce ở ngoài hoặc atomic bên trong)
-    // Ở Phase Naive, ta dùng atomicAdd cho đơn giản
+    // MSE Forward: Tính bình phương lỗi từng phần tử
+    // atomicAdd
     __global__ void mse_loss_kernel(const float* pred, const float* target, float* total_loss, int size);
 
     // MSE Backward: Tính dL/dOutput
@@ -56,7 +56,7 @@ namespace NaiveKernels {
     __global__ void sgd_update_kernel(float* weights, const float* grads, float lr, int size);
 }
 
-// Namespace cho Phase 3 Kernels (Phase 3)
+// Phase 3 Kernels
 namespace Phase3Kernels {
     // 1. Shared Memory Convolution
     __global__ void conv2d_shared_mem_kernel(const float* input, float* output, const float* weights, const float* bias,

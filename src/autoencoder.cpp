@@ -79,7 +79,6 @@ void Autoencoder::forward(const std::vector<float>& input, int batch_size) {
 
 // BACKWARD PASS
 void Autoencoder::backward(const std::vector<float>& input_batch, int batch_size) {
-    // Các biến tạm để lưu gradient giữa các layer
     std::vector<float> d_output, d_up2, d_conv4_relu, d_conv4, d_up1, d_conv3_relu, d_conv3;
     std::vector<float> d_pool2, d_conv2_relu, d_conv2, d_pool1, d_conv1_relu, d_conv1, d_input;
 
@@ -120,7 +119,6 @@ void Autoencoder::backward(const std::vector<float>& input_batch, int batch_size
 
 // UPDATE WEIGHTS
 void Autoencoder::update(float lr) {
-    // Helper lambda để update 1 vector
     auto update_vec = [&](std::vector<float>& w, const std::vector<float>& dw) {
         for (size_t i = 0; i < w.size(); ++i) {
             w[i] -= lr * dw[i];
@@ -140,7 +138,7 @@ void Autoencoder::save_weights(const std::string& filepath) {
         std::cerr << "Cannot save weights to " << filepath << std::endl;
         return;
     }
-    // Lưu đơn giản: Kích thước -> Dữ liệu
+    
     auto save_vec = [&](const std::vector<float>& v) {
         size_t size = v.size();
         out.write(reinterpret_cast<const char*>(&size), sizeof(size));

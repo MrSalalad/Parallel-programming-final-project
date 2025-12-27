@@ -9,7 +9,7 @@
 #include "../include/gpu_autoencoder.h" 
 #include <fstream> 
 
-// Hàm phụ trợ: Copy từ GPU về CPU rồi ghi ra file
+// Copy từ GPU về CPU rồi ghi ra file
 void save_gpu_layer(std::ofstream& file, float* d_data, int size) {
     std::vector<float> h_data(size);
     cudaMemcpy(h_data.data(), d_data, size * sizeof(float), cudaMemcpyDeviceToHost);
@@ -67,13 +67,12 @@ int main() {
 
     // 2. Config
     int batch_size = 64;       
-    int target_epochs = 20;    // Chạy đủ 20 vòng
+    int target_epochs = 20;
     float learning_rate = 0.001f;
 
     std::cout << "[CONFIG] Target Epochs: " << target_epochs << std::endl;
     
     // 3. Init Weights
-    // Vẫn dùng Autoencoder class để sinh số ngẫu nhiên ban đầu (chỉ mất <1s)
     std::cout << "[INIT] Generating random weights..." << std::endl;
     Autoencoder cpu_helper; 
     
@@ -134,7 +133,7 @@ int main() {
                   << " | Avg Loss: " << std::setprecision(5) << epoch_loss / batch_count << std::endl;
     }
 
-    // --- BÁO CÁO KẾT QUẢ ---
+    // BÁO CÁO KẾT QUẢ
     double avg_time = total_gpu_time / target_epochs;
 
     std::cout << "\n==================================================" << std::endl;

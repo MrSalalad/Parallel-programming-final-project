@@ -1,9 +1,8 @@
 #include "../../include/gpu_autoencoder.h"
-#include "../../include/kernels.cuh" // Header chứa tên hàm namespace NaiveKernels
+#include "../../include/kernels.cuh"
 #include <iostream>
 #include <cstdio>
 
-// Macro helper check lỗi CUDA
 #define CHECK(call) { \
     const cudaError_t error = call; \
     if (error != cudaSuccess) { \
@@ -12,7 +11,6 @@
     } \
 }
 
-// Helper tính Grid Size 1D
 dim3 get_grid_size(int total_threads, int block_size = 256) {
     return dim3((total_threads + block_size - 1) / block_size);
 }
@@ -20,7 +18,7 @@ dim3 get_grid_size(int total_threads, int block_size = 256) {
 GPUAutoencoder::GPUAutoencoder(int b_size) : batch_size(b_size) {
     std::cout << "Allocating GPU Memory (Batch Size: " << batch_size << ")..." << std::endl;
 
-    // --- 1. ALLOCATE WEIGHTS & GRADIENTS ---
+    // 1. ALLOCATE WEIGHTS & GRADIENTS
     auto allocate_layer = [&](float** w, float** b, float** dw, float** db, int size_w, int size_b) {
         CHECK(cudaMalloc(w, size_w * sizeof(float)));
         CHECK(cudaMalloc(b, size_b * sizeof(float)));
@@ -94,9 +92,7 @@ void GPUAutoencoder::loadWeights(
     copy_to_gpu(d_conv5_w, h_conv5_w); copy_to_gpu(d_conv5_b, h_conv5_b);
 }
 
-// =============================================================================
 // 1. FORWARD PASS
-// =============================================================================
 void GPUAutoencoder::forward(float* d_batch_data) {
     // Copy input batch vào buffer d_input
     int input_size = batch_size * 3 * 32 * 32;
@@ -128,7 +124,7 @@ void GPUAutoencoder::forward(float* d_batch_data) {
     NaiveKernels::max_pool_forward_kernel<<<get_grid_size(size_p2), block_size>>>(
         d_conv2_out, d_encoded, batch_size, 128, 16, 16, 8, 8);
 
-    // --- DECODER ---
+    // Decoder
     // 3. Conv3: 128 -> 128
     int size_c3 = batch_size * 128 * 8 * 8;
     NaiveKernels::conv2d_forward_kernel<<<get_grid_size(size_c3), block_size>>>(
@@ -165,13 +161,9 @@ void GPUAutoencoder::forward(float* d_batch_data) {
 void GPUAutoencoder::forward_phase3_ver1() {
     int block_size = 256;
 
-    // CẤU HÌNH KERNEL SHARED MEMORY
-    // Kernel này yêu cầu block cố định 16x16 để khớp với TILE_WIDTH trong code kernel
     dim3 block_shared(16, 16); 
         
-    // ============================
     // LAYER 1: Conv1 (32x32)
-    // ============================
     // Grid: (W/16, H/16, Batch * Out_Channel)
     dim3 grid_c1((32 + 15)/16, (32 + 15)/16, batch_size * 256);
         
@@ -181,7 +173,6 @@ void GPUAutoencoder::forward_phase3_ver1() {
         batch_size, 3, 256, 32, 32, 32, 32 // Input: 32x32, Output: 32x32
     );
         
-    // Vẫn cần ReLU và Pool (Dùng Naive kernel nhưng chạy trên stream)
     int size_c1 = batch_size * 256 * 32 * 32;
     NaiveKernels::relu_forward_kernel<<<get_grid_size(size_c1), block_size, 0, stream_compute>>>(d_conv1_out, size_c1);
         
@@ -189,9 +180,7 @@ void GPUAutoencoder::forward_phase3_ver1() {
     NaiveKernels::max_pool_forward_kernel<<<get_grid_size(size_p1), block_size, 0, stream_compute>>>(
         d_conv1_out, d_pool1_out, batch_size, 256, 32, 32, 16, 16);
 
-    // ============================
     // LAYER 2: Conv2 (16x16)
-    // ============================
     dim3 grid_c2((16 + 15)/16, (16 + 15)/16, batch_size * 128);
         
     Phase3Kernels::conv2d_shared_mem_kernel<<<grid_c2, block_shared, 0, stream_compute>>>(
@@ -206,11 +195,7 @@ void GPUAutoencoder::forward_phase3_ver1() {
     NaiveKernels::max_pool_forward_kernel<<<get_grid_size(size_p2), block_size, 0, stream_compute>>>(
         d_conv2_out, d_encoded, batch_size, 128, 16, 16, 8, 8);
 
-    // ============================
     // DECODER (Conv3, Conv4, Conv5)
-    // ============================
-    // Conv3 (8x8) -> Quá nhỏ cho Tile 16x16, nên dùng Naive hoặc Fused ở đây thì tốt hơn
-    // Nhưng để demo, ta vẫn dùng Naive cho layer quá nhỏ này
     int size_c3 = batch_size * 128 * 8 * 8;
     NaiveKernels::conv2d_forward_kernel<<<get_grid_size(size_c3), block_size, 0, stream_compute>>>(
         d_encoded, d_conv3_out, d_conv3_w, d_conv3_b,
@@ -222,7 +207,7 @@ void GPUAutoencoder::forward_phase3_ver1() {
     NaiveKernels::upsample_forward_kernel<<<get_grid_size(size_up1), block_size, 0, stream_compute>>>(
         d_conv3_out, d_up1_out, batch_size, 128, 8, 8, 16, 16);
 
-    // Conv4 (16x16) -> Dùng Shared Mem được
+    // Conv4 (16x16)
     dim3 grid_c4((16 + 15)/16, (16 + 15)/16, batch_size * 256);
     Phase3Kernels::conv2d_shared_mem_kernel<<<grid_c4, block_shared, 0, stream_compute>>>(
         d_up1_out, d_conv4_out, d_conv4_w, d_conv4_b,
@@ -247,9 +232,7 @@ void GPUAutoencoder::forward_phase3_ver1() {
     CHECK(cudaStreamSynchronize(stream_compute));
 }
 
-// =============================================================================
 // 2. COMPUTE LOSS
-// =============================================================================
 float GPUAutoencoder::compute_loss(float* d_target) {
     float* d_loss_sum;
     CHECK(cudaMalloc(&d_loss_sum, sizeof(float)));
@@ -265,9 +248,7 @@ float GPUAutoencoder::compute_loss(float* d_target) {
     return total_loss / size_out;
 }
 
-// =============================================================================
 // 3. BACKWARD PASS
-// =============================================================================
 void GPUAutoencoder::backward(float* d_target) {
     int size_32x32 = batch_size * 3 * 32 * 32;
     int block = 256;
@@ -387,7 +368,7 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
     // Config chung
     int size_32x32 = batch_size * 3 * 32 * 32;
     int block = 256;
-    dim3 block_shared(16, 16); // Block cho kernel tối ưu
+    dim3 block_shared(16, 16);
 
     float *d_grad_buffer; 
     CHECK(cudaMalloc(&d_grad_buffer, batch_size * 256 * 32 * 32 * sizeof(float)));
@@ -396,13 +377,11 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
     NaiveKernels::mse_backward_kernel<<<get_grid_size(size_32x32), block, 0, stream_compute>>>(
         d_output, d_target, d_grad_buffer, size_32x32);
 
-    // =========================================================
     // LAYER 5 BACKWARD (Output -> Up2)
-    // =========================================================
     CHECK(cudaMemsetAsync(d_conv5_dw, 0, 3 * 256 * 9 * sizeof(float), stream_compute));
     CHECK(cudaMemsetAsync(d_conv5_db, 0, 3 * sizeof(float), stream_compute));
 
-    // Weight Gradient (Vẫn dùng Naive vì tối ưu cái này phức tạp - Reduction)
+    // Weight Gradient
     int n_w5 = 3 * 256 * 9;
     NaiveKernels::conv2d_backward_weight_kernel<<<get_grid_size(n_w5), block, 0, stream_compute>>>(
         d_up2_out, d_grad_buffer, d_conv5_dw, d_conv5_db,
@@ -411,32 +390,22 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
     float *d_grad_next;
     CHECK(cudaMalloc(&d_grad_next, batch_size * 256 * 32 * 32 * sizeof(float)));
     
-    // --- OPTIMIZATION START: Input Gradient (Layer 5) ---
-    // Naive cũ: 
-    // NaiveKernels::conv2d_backward_input_kernel<<<...>>>(...);
+    //  Input Gradient (Layer 5)
     
-    // Phase 3 Mới: Dùng Shared Memory
+    // Phase 3 mới: Dùng Shared Memory
     // Grid tính theo Input Size (32x32) và Channel Input (256)
     dim3 grid_b5((32 + 15)/16, (32 + 15)/16, batch_size * 256);
     Phase3Kernels::conv2d_backward_input_shared_mem_kernel<<<grid_b5, block_shared, 0, stream_compute>>>(
         d_grad_buffer, d_conv5_w, d_grad_next,
-        batch_size, 256, 3, 32, 32, 32, 32 // Chú ý: 256 là in_c (output của backward), 3 là out_c (input của backward)
+        batch_size, 256, 3, 32, 32, 32, 32 
     );
-    // --- OPTIMIZATION END ---
 
-    // =========================================================
     // LAYER 4 BACKWARD (Up2 -> Conv4 -> Up1)
-    // =========================================================
     // 1. Upsample Backward (Up2)
     int size_up2 = batch_size * 256 * 32 * 32;
     int size_conv4 = batch_size * 256 * 16 * 16;
-    // Buffer Up2 -> Conv4 Out (d_grad_buffer đang là size lớn, dùng lại được)
-    // Nhưng Upsample Backward reduce size, nên kết quả ghi vào buffer nhỏ hơn
-    // Ta dùng d_grad_buffer làm source (grad_next ở trên), ghi vào d_grad_next (làm temp)
-    // Để tránh rối buffer, ta free/alloc lại hoặc dùng pointer swap. 
-    // Để an toàn và dễ hiểu, ta làm từng bước:
     
-    float *d_grad_conv4; // Gradient tại output của Conv4
+    float *d_grad_conv4;
     CHECK(cudaMalloc(&d_grad_conv4, size_conv4 * sizeof(float)));
 
     NaiveKernels::upsample_backward_kernel<<<get_grid_size(size_conv4), block, 0, stream_compute>>>(
@@ -457,7 +426,7 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
     float *d_grad_up1;
     CHECK(cudaMalloc(&d_grad_up1, batch_size * 128 * 16 * 16 * sizeof(float)));
 
-    // --- OPTIMIZATION: Input Gradient (Layer 4) ---
+    // OPTIMIZATION: Input Gradient (Layer 4)
     // Grid: 16x16, Channel 128
     dim3 grid_b4((16 + 15)/16, (16 + 15)/16, batch_size * 128);
     Phase3Kernels::conv2d_backward_input_shared_mem_kernel<<<grid_b4, block_shared, 0, stream_compute>>>(
@@ -465,9 +434,7 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
         batch_size, 128, 256, 16, 16, 16, 16 
     );
 
-    // =========================================================
     // LAYER 3 (Up1 -> Conv3 -> Encoded)
-    // =========================================================
     int size_conv3 = batch_size * 128 * 8 * 8;
     float *d_grad_conv3;
     CHECK(cudaMalloc(&d_grad_conv3, size_conv3 * sizeof(float)));
@@ -486,20 +453,18 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
         batch_size, 128, 128, 8, 8, 8, 8, 3, 1, 1);
 
     float *d_grad_encoded;
-    CHECK(cudaMalloc(&d_grad_encoded, size_conv3 * sizeof(float))); // 8x8x128
+    CHECK(cudaMalloc(&d_grad_encoded, size_conv3 * sizeof(float)));
 
-    // Layer 3 nhỏ (8x8), dùng Naive Kernel có thể nhanh hơn Shared Mem do overhead
+    // Layer 3 nhỏ (8x8)
     NaiveKernels::conv2d_backward_input_kernel<<<get_grid_size(size_conv3), block, 0, stream_compute>>>(
         d_grad_conv3, d_conv3_w, d_grad_encoded,
         batch_size, 128, 128, 8, 8, 8, 8, 3, 1, 1);
 
-    // =========================================================
     // LAYER 2 (Encoded -> Pool2 -> Conv2 -> Pool1)
-    // =========================================================
     int size_conv2 = batch_size * 128 * 16 * 16;
     float *d_grad_conv2;
     CHECK(cudaMalloc(&d_grad_conv2, size_conv2 * sizeof(float)));
-    CHECK(cudaMemsetAsync(d_grad_conv2, 0, size_conv2 * sizeof(float), stream_compute)); // MaxPool backward cần init 0
+    CHECK(cudaMemsetAsync(d_grad_conv2, 0, size_conv2 * sizeof(float), stream_compute));
 
     NaiveKernels::max_pool_backward_kernel<<<get_grid_size(size_conv3), block, 0, stream_compute>>>(
         d_conv2_out, d_grad_encoded, d_grad_conv2,
@@ -518,7 +483,7 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
     float *d_grad_pool1;
     CHECK(cudaMalloc(&d_grad_pool1, batch_size * 256 * 16 * 16 * sizeof(float)));
 
-    // --- OPTIMIZATION: Input Gradient (Layer 2) ---
+    // OPTIMIZATION: Input Gradient (Layer 2)
     // Grid 16x16, Channel 256
     dim3 grid_b2((16 + 15)/16, (16 + 15)/16, batch_size * 256);
     Phase3Kernels::conv2d_backward_input_shared_mem_kernel<<<grid_b2, block_shared, 0, stream_compute>>>(
@@ -526,9 +491,7 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
         batch_size, 256, 128, 16, 16, 16, 16
     );
 
-    // =========================================================
     // LAYER 1 (Pool1 -> Conv1 -> Input)
-    // =========================================================
     int size_conv1 = batch_size * 256 * 32 * 32;
     float *d_grad_conv1;
     CHECK(cudaMalloc(&d_grad_conv1, size_conv1 * sizeof(float)));
@@ -548,10 +511,6 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
         d_input, d_grad_conv1, d_conv1_dw, d_conv1_db,
         batch_size, 3, 256, 32, 32, 32, 32, 3, 1, 1);
 
-    // Backward Input cho Layer 1 (không cần thiết nếu không cần Gradient Input, nhưng để đủ bộ):
-    // Phase3Kernels::conv2d_backward_input_shared_mem_kernel<<<...>>>(...);
-
-    // Clean up
     CHECK(cudaFree(d_grad_buffer));
     CHECK(cudaFree(d_grad_next));
     CHECK(cudaFree(d_grad_conv4));
@@ -565,9 +524,7 @@ void GPUAutoencoder::backward_phase3_ver1(float* d_target) {
     CHECK(cudaStreamSynchronize(stream_compute));
 }
 
-// =============================================================================
 // 4. UPDATE
-// =============================================================================
 void GPUAutoencoder::update(float lr) {
     int block = 256;
     auto update_w = [&](float* w, float* dw, int size) {

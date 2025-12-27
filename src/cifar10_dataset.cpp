@@ -10,7 +10,6 @@ CIFAR10Dataset::CIFAR10Dataset(const std::string& dir)
     : data_dir(dir), current_batch_index(0) {}
 
 void CIFAR10Dataset::load_data() {
-    // Phần reserve và loop đọc file
     std::cout << "Loading training data..." << std::endl;
     size_t total_train_floats = 50000 * (size_t)IMG_SIZE; 
     train_images.reserve(total_train_floats);
@@ -97,7 +96,6 @@ bool CIFAR10Dataset::get_next_batch(int batch_size, std::vector<float>& batch_da
         }
     }
 
-    // Cập nhật con trỏ
     current_batch_index += actual_batch_size;
     return true;
 }

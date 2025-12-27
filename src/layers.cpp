@@ -5,15 +5,11 @@
 #include <cmath>
 
 namespace CPULayers {
-
-    // Helper: Lấy index mảng 1 chiều từ tọa độ NCHW (Batch, Channel, Height, Width)
     inline int get_idx(int b, int c, int h, int w, int channels, int height, int width) {
         return b * (channels * height * width) + c * (height * width) + h * width + w;
     }
 
-    // =========================================================================
-    // PHẦN 1: FORWARD PASS (TÍNH XUÔI)
-    // =========================================================================
+    // PHẦN 1: FORWARD PASS
 
     // 1. Convolution 2D (Padding=1, Stride=1, Kernel 3x3)
     void conv2d(const std::vector<float>& input, std::vector<float>& output,
@@ -98,7 +94,7 @@ namespace CPULayers {
         }
     }
 
-    // 4. Upsampling 2x2 (Nearest Neighbor)
+    // 4. Upsampling 2x2
     void upsample(const std::vector<float>& input, std::vector<float>& output,
                   int batch_size, int channels, int in_height, int in_width) {
         
@@ -132,10 +128,7 @@ namespace CPULayers {
         return sum / output.size();
     }
 
-    // =========================================================================
-    // PHẦN 2: BACKWARD PASS (TÍNH NGƯỢC ĐỂ TRAIN)
-    // =========================================================================
-
+    // PHẦN 2: BACKWARD PASS
     // 1. MSE Backward: dL/dOutput
     void mse_loss_backward(const std::vector<float>& output, const std::vector<float>& target, 
                            std::vector<float>& grad_input) {

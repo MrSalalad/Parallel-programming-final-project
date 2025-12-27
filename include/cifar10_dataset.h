@@ -24,9 +24,9 @@ public:
 
     // 2. Lấy batch tiếp theo
     // Trả về true nếu lấy thành công, false nếu hết dữ liệu (hết epoch)
-    bool get_next_batch(int batch_size, std::vector<float>& batch_data); // Autoencoder chỉ cần ảnh, không cần label để train
+    bool get_next_batch(int batch_size, std::vector<float>& batch_data);
 
-    // 3. Reset iterator về đầu (dùng sau mỗi epoch)
+    // 3. Reset iterator về đầu (sau mỗi epoch)
     void reset_iterator();
 
     // Lấy số lượng ảnh train
